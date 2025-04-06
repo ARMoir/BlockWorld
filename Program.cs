@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 class Program
 {
     static readonly int width = 120;
-    static readonly int height = 40;
+    static readonly int height = 28;
     static char[,]? world;
     static int charX, charY;
     static int worldOffset = 0;
@@ -258,6 +258,7 @@ class Program
                                     char destroyedTile = world[charY - 1, charX];
                                     world[charY - 1, charX] = ' ';  // Destroy the tile above
                                     AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    UpdateScreenBuffer(charX, charY - 1, ' ', ConsoleColor.Gray, ConsoleColor.Black);
                                     needsRedraw = true;
                                 }
                                 break;
@@ -267,6 +268,7 @@ class Program
                                     char destroyedTile = world[charY + 1, charX];
                                     world[charY + 1, charX] = ' ';  // Destroy the tile below
                                     AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    UpdateScreenBuffer(charX, charY + 1, ' ', ConsoleColor.Gray, ConsoleColor.Black);
                                     needsRedraw = true;
                                 }
                                 break;
@@ -276,6 +278,7 @@ class Program
                                     char destroyedTile = world[charY, charX - 1];
                                     world[charY, charX - 1] = ' ';  // Destroy the tile to the left
                                     AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    UpdateScreenBuffer(charX - 1, charY, ' ', ConsoleColor.Gray, ConsoleColor.Black);
                                     needsRedraw = true;
                                 }
                                 break;
@@ -285,6 +288,7 @@ class Program
                                     char destroyedTile = world[charY, charX + 1];
                                     world[charY, charX + 1] = ' ';  // Destroy the tile to the right
                                     AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    UpdateScreenBuffer(charX + 1, charY, ' ', ConsoleColor.Gray, ConsoleColor.Black);
                                     needsRedraw = true;
                                 }
                                 break;
@@ -292,23 +296,16 @@ class Program
                                 break;
                         }
                         break;
-
                 }
 
                 // Update player position if the new position is valid
                 if (IsInside(newX, newY) && IsWalkable(world[newY, newX]))
                 {
+                    UpdateScreenBuffer(charX, charY, world[charY, charX], ConsoleColor.Gray, ConsoleColor.Black);
                     charX = newX;
                     charY = newY;
+                    UpdateScreenBuffer(charX, charY, '☺', ConsoleColor.Yellow, ConsoleColor.Black);
                     needsRedraw = true; // Trigger redraw when player moves
-                }
-
-                // Handle world section loading when player reaches the edge
-                if (newX <= 0 || newX >= width - 1 || newY <= 0 || newY >= height - 1)
-                {
-                    worldOffset++;
-                    if (worldOffset >= worldSections.GetLength(0)) worldOffset = 0;  // Loop around sections
-                    world = GetWorldSection(worldSections, worldOffset);
                 }
             }
         }
@@ -326,45 +323,123 @@ class Program
         }
     }
 
-    static void UpdateGameState()
+    // Example usage in game logic
+static void UpdateGameState()
+{
+    // Apply gravity
+    if (IsInside(charX, charY + 1) && IsWalkable(world[charY + 1, charX]))
     {
-        // Apply gravity
-        if (IsInside(charX, charY + 1) && IsWalkable(world[charY + 1, charX]))
-        {
-            charY++;
-            needsRedraw = true; // Trigger redraw when gravity affects player
-        }
+        // Mark current position as dirty
+        UpdateScreenBuffer(charX, charY, world[charY, charX], ConsoleColor.Gray, ConsoleColor.Black);
+        charY++;
+        // Mark new position as dirty
+        UpdateScreenBuffer(charX, charY, '☺', ConsoleColor.Yellow, ConsoleColor.Black);
+        needsRedraw = true; // Trigger redraw when gravity affects player
     }
+}
 
-    static readonly StringBuilder offScreenBuffer = new StringBuilder(); // Off-screen buffer to hold the next frame
+    static Dictionary<(int x, int y), (char tile, ConsoleColor foreground, ConsoleColor background)> screenBuffer = new();
+
+    static bool firstRender = true;
 
     static void Render()
     {
-        offScreenBuffer.Clear();  // Clear the buffer
-
-        // Render the world as before
-        for (int y = 0; y < height; y++)
+        if (firstRender)
         {
-            for (int x = 0; x < width; x++)
+            // Initial full screen render
+            for (int y = 0; y < height; y++)
             {
-                if (x == charX && y == charY)
-                    offScreenBuffer.Append('☺');  // Player symbol
-                else
-                    offScreenBuffer.Append(world[y, x]);  // World state
+                for (int x = 0; x < width; x++)
+                {
+                    char tile = world[y, x];
+                    ConsoleColor foreground = ConsoleColor.Gray; // Default color
+                    ConsoleColor background = ConsoleColor.Black;
+
+                    if (x == charX && y == charY)
+                    {
+                        foreground = ConsoleColor.Yellow; // Player color
+                        tile = '☺';  // Player symbol
+                    }
+                    else
+                    {
+                        // Set color based on tile type
+                        switch (tile)
+                        {
+                            case '#':
+                                foreground = ConsoleColor.DarkGray; // Ground/Mountain
+                                break;
+                            case '~':
+                                foreground = ConsoleColor.White; // Cloud
+                                break;
+                            case '^':
+                                foreground = ConsoleColor.Green; // Tree foliage
+                                break;
+                            case '|':
+                                foreground = ConsoleColor.DarkGreen; // Tree trunk
+                                break;
+                            case '*':
+                                foreground = ConsoleColor.Yellow; // Ore
+                                break;
+                            case '♦':
+                                foreground = ConsoleColor.Blue; // Ore
+                                break;
+                            case '%':
+                                foreground = ConsoleColor.Red; // Ore
+                                break;
+                        }
+                    }
+
+                    // Set the cursor position and color
+                    Console.SetCursorPosition(x, y);
+                    Console.ForegroundColor = foreground;
+                    Console.BackgroundColor = background;
+
+                    // Write the character
+                    Console.Write(tile);
+                }
             }
-            offScreenBuffer.Append('\n');
+
+            firstRender = false; // Switch to dirty rendering after the initial render
+        }
+        else
+        {
+            // Dirty rendering for subsequent frames
+            foreach (var cell in screenBuffer)
+            {
+                (int x, int y) = cell.Key;
+                (char tile, ConsoleColor foreground, ConsoleColor background) = cell.Value;
+
+                // Set the cursor position and color
+                Console.SetCursorPosition(x, y);
+                Console.ForegroundColor = foreground;
+                Console.BackgroundColor = background;
+
+                // Write the character
+                Console.Write(tile);
+            }
+
+            // Clear the buffer after rendering
+            screenBuffer.Clear();
         }
 
         // Render the inventory at the bottom of the screen
-        offScreenBuffer.Append("\nInventory: ");
+        Console.SetCursorPosition(0, height);
+        Console.ForegroundColor = ConsoleColor.White;
+        Console.BackgroundColor = ConsoleColor.Black;
+        Console.Write("Inventory: ");
         foreach (var item in inventory)
         {
-            offScreenBuffer.Append($"{item.Key}:{item.Value} ");  // Display item and count
+            Console.Write($"{item.Key}:{item.Value} ");  // Display item and count
         }
+    }
 
-        Console.Clear();  // Clear the screen
-        Console.SetCursorPosition(0, 0);  // Reset cursor to top-left
-        Console.Write(offScreenBuffer.ToString());  // Print the frame with inventory
+
+    static void UpdateScreenBuffer(int x, int y, char tile, ConsoleColor foreground, ConsoleColor background)
+    {
+        if (IsInside(x, y))
+        {
+            screenBuffer[(x, y)] = (tile, foreground, background);
+        }
     }
 
 
