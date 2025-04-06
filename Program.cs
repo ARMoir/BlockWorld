@@ -12,6 +12,8 @@ class Program
     static int worldOffset = 0;
     static readonly char[,,] worldSections = new char[5, height, width];
     static bool needsRedraw = true;
+    static Dictionary<char, int> inventory = new Dictionary<char, int>();
+
 
     static void Main()
     {
@@ -247,49 +249,50 @@ class Program
                         break;
 
                     case ConsoleKey.Spacebar:
-                        // Destroy the '#' in the direction of last movement
+                        // Destroy the block in the direction of last movement
                         switch (lastDirection)
                         {
                             case Direction.Up:
-                                // Check above the player
-                                if (IsInside(charX, charY - 1) && world[charY - 1, charX] == '#')
+                                if (IsInside(charX, charY - 1) && IsDestructible(world[charY - 1, charX]))
                                 {
-                                    world[charY - 1, charX] = ' ';  // Destroy the # above
-                                    needsRedraw = true;  // Trigger redraw after destroying the tile
+                                    char destroyedTile = world[charY - 1, charX];
+                                    world[charY - 1, charX] = ' ';  // Destroy the tile above
+                                    AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    needsRedraw = true;
                                 }
                                 break;
-
                             case Direction.Down:
-                                // Check below the player
-                                if (IsInside(charX, charY + 1) && world[charY + 1, charX] == '#')
+                                if (IsInside(charX, charY + 1) && IsDestructible(world[charY + 1, charX]))
                                 {
-                                    world[charY + 1, charX] = ' ';  // Destroy the # below
-                                    needsRedraw = true;  // Trigger redraw after destroying the tile
+                                    char destroyedTile = world[charY + 1, charX];
+                                    world[charY + 1, charX] = ' ';  // Destroy the tile below
+                                    AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    needsRedraw = true;
                                 }
                                 break;
-
                             case Direction.Left:
-                                // Check left of the player
-                                if (IsInside(charX - 1, charY) && world[charY, charX - 1] == '#')
+                                if (IsInside(charX - 1, charY) && IsDestructible(world[charY, charX - 1]))
                                 {
-                                    world[charY, charX - 1] = ' ';  // Destroy the # to the left
-                                    needsRedraw = true;  // Trigger redraw after destroying the tile
+                                    char destroyedTile = world[charY, charX - 1];
+                                    world[charY, charX - 1] = ' ';  // Destroy the tile to the left
+                                    AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    needsRedraw = true;
                                 }
                                 break;
-
                             case Direction.Right:
-                                // Check right of the player
-                                if (IsInside(charX + 1, charY) && world[charY, charX + 1] == '#')
+                                if (IsInside(charX + 1, charY) && IsDestructible(world[charY, charX + 1]))
                                 {
-                                    world[charY, charX + 1] = ' ';  // Destroy the # to the right
-                                    needsRedraw = true;  // Trigger redraw after destroying the tile
+                                    char destroyedTile = world[charY, charX + 1];
+                                    world[charY, charX + 1] = ' ';  // Destroy the tile to the right
+                                    AddToInventory(destroyedTile);  // Add the destroyed tile to the inventory
+                                    needsRedraw = true;
                                 }
                                 break;
-
                             default:
-                                break;  // If no movement direction, do nothing
+                                break;
                         }
                         break;
+
                 }
 
                 // Update player position if the new position is valid
@@ -311,6 +314,18 @@ class Program
         }
     }
 
+    static void AddToInventory(char item)
+    {
+        if (inventory.ContainsKey(item))
+        {
+            inventory[item]++;
+        }
+        else
+        {
+            inventory[item] = 1;
+        }
+    }
+
     static void UpdateGameState()
     {
         // Apply gravity
@@ -325,34 +340,45 @@ class Program
 
     static void Render()
     {
-        // Clear the off-screen buffer for each new frame
-        offScreenBuffer.Clear();
+        offScreenBuffer.Clear();  // Clear the buffer
 
-        // Build the frame in the off-screen buffer
+        // Render the world as before
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 if (x == charX && y == charY)
-                    offScreenBuffer.Append('☺'); // Representing the player with '@'
+                    offScreenBuffer.Append('☺');  // Player symbol
                 else
-                    offScreenBuffer.Append(world[y, x]); // Otherwise, the world state
+                    offScreenBuffer.Append(world[y, x]);  // World state
             }
-            offScreenBuffer.Append('\n'); // Add a line break after each row
+            offScreenBuffer.Append('\n');
         }
 
-        // Ensure the console is fully cleared and the cursor is at the top-left
-        Console.Clear(); // Clear the screen
+        // Render the inventory at the bottom of the screen
+        offScreenBuffer.Append("\nInventory: ");
+        foreach (var item in inventory)
+        {
+            offScreenBuffer.Append($"{item.Key}:{item.Value} ");  // Display item and count
+        }
 
-        // Output the entire frame from the off-screen buffer to the console
-        Console.SetCursorPosition(0, 0); // Reset cursor to top-left
-        Console.Write(offScreenBuffer.ToString()); // Write the entire frame to the console
+        Console.Clear();  // Clear the screen
+        Console.SetCursorPosition(0, 0);  // Reset cursor to top-left
+        Console.Write(offScreenBuffer.ToString());  // Print the frame with inventory
     }
+
 
     static bool IsInside(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
 
     static bool IsWalkable(char tile)
     {
         return tile == ' ' || tile == '*' || tile == '♦' || tile == '~';
+    }
+
+    // A method to check if a tile is destructible
+    static bool IsDestructible(char tile)
+    {
+        // You can add more tiles to the destructible list as needed
+        return tile == '#' || tile == '*' || tile == '♦' || tile == '%' || tile == '^' || tile == '|';
     }
 }
