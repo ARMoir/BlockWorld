@@ -5,12 +5,12 @@ using System.Threading.Tasks;
 
 class Program
 {
-    static int width = 120;
-    static int height = 40;
+    static readonly int width = 120;
+    static readonly int height = 40;
     static char[,]? world;
     static int charX, charY;
     static int worldOffset = 0;
-    static char[,,] worldSections = new char[5, height, width];
+    static readonly char[,,] worldSections = new char[5, height, width];
     static bool needsRedraw = true;
 
     static void Main()
@@ -29,51 +29,83 @@ class Program
     static void GenerateWorldSection(char[,,] sections, int sectionIndex)
     {
         Random rand = new Random();
-        int skyHeight = height - 15;
-        int groundStart = skyHeight + 3;
+        int skyHeight = height - 15;  // Sky height
+        int groundStart = skyHeight + 3;  // Ground level start
 
-        // 1. Sky and ground
+        // 1. Sky and ground (initialize sky and ground)
         for (int y = 0; y < height; y++)
         {
             for (int x = 0; x < width; x++)
             {
                 if (y < skyHeight)
-                    sections[sectionIndex, y, x] = rand.Next(100) < 2 ? '~' : ' ';
-                else if (y <= skyHeight + 3)
-                    sections[sectionIndex, y, x] = '#';
+                {
+                    // Only place clouds in the upper portion of the sky
+                    if (y < skyHeight - 5 && rand.Next(100) < 2)
+                        sections[sectionIndex, y, x] = '~';  // Cloud
+                    else
+                        sections[sectionIndex, y, x] = ' ';  // Empty sky
+                }
                 else
-                    sections[sectionIndex, y, x] = '#';
+                {
+                    sections[sectionIndex, y, x] = '#';  // Ground
+                }
             }
         }
 
-        // 2. Mountains
-        for (int i = 0; i < 10; i++)
+        // 2. Mountains (add mountains)
+        for (int i = 0; i < 10; i++)  // Add a few mountains
         {
             int mountainX = rand.Next(width);
             int mountainHeight = rand.Next(5, 10);
             int mountainBase = skyHeight - mountainHeight;
 
-            for (int y = mountainBase; y < skyHeight; y++)
+            for (int y = mountainBase; y < skyHeight; y++)  // Build the mountain
             {
                 int mountainWidth = (mountainHeight - (skyHeight - y)) * 2;
                 for (int x = mountainX - mountainWidth / 2; x <= mountainX + mountainWidth / 2; x++)
                 {
                     if (IsInside(x, y))
-                        sections[sectionIndex, y, x] = '#';
+                        sections[sectionIndex, y, x] = '#';  // Mountain terrain
                 }
             }
         }
 
-        // 3. Trees
+        // 3. Trees (randomly place trees on mountains and ground)
         for (int x = 0; x < width; x++)
         {
-            if (rand.Next(100) < 10 && sections[sectionIndex, skyHeight, x] != '#')
+            // === 1. Tree on Mountain Peaks ===
+            if (rand.Next(100) < 10) // 10% chance
             {
-                sections[sectionIndex, skyHeight, x] = '^';
-                if (IsInside(x, skyHeight + 1)) sections[sectionIndex, skyHeight + 1, x] = '|';
-                if (IsInside(x, skyHeight + 2)) sections[sectionIndex, skyHeight + 2, x] = '|';
+                for (int y = 1; y < height - 2; y++) // Start at y=1 to allow checking y-1 and y-2 safely
+                {
+                    // Find a mountain peak: a '#' block with empty space above it
+                    if (sections[sectionIndex, y, x] == '#' &&
+                        sections[sectionIndex, y - 1, x] == ' ' &&
+                        sections[sectionIndex, y - 2, x] == ' ')
+                    {
+                        sections[sectionIndex, y - 2, x] = '^'; // Foliage
+                        sections[sectionIndex, y - 1, x] = '|'; // Trunk
+                        break; // Only one tree per column
+                    }
+                }
+            }
+
+            // === 2. Tree on Ground ===
+            if (sections[sectionIndex, groundStart, x] == '#') // Ground exists at this column
+            {
+                if (rand.Next(100) < 10) // 10% chance
+                {
+                    // Check if trunk and foliage space is free
+                    if (IsInside(x, groundStart - 1) && sections[sectionIndex, groundStart - 1, x] == ' ' &&
+                        IsInside(x, groundStart - 2) && sections[sectionIndex, groundStart - 2, x] == ' ')
+                    {
+                        sections[sectionIndex, groundStart - 2, x] = '^'; // Foliage
+                        sections[sectionIndex, groundStart - 1, x] = '|'; // Trunk
+                    }
+                }
             }
         }
+
 
         // 4. Carve caves
         for (int i = 0; i < 20; i++) // Reduced number of caves
@@ -105,7 +137,7 @@ class Program
                     int ore = rand.Next(100);
                     if (ore < 2) sections[sectionIndex, y, x] = '♦';
                     else if (ore < 6) sections[sectionIndex, y, x] = '*';
-                    else if (ore < 8) sections[sectionIndex, y, x] = '~';
+                    else if (ore < 8) sections[sectionIndex, y, x] = '%';
                 }
             }
         }
@@ -279,7 +311,6 @@ class Program
         }
     }
 
-
     static void UpdateGameState()
     {
         // Apply gravity
@@ -290,7 +321,7 @@ class Program
         }
     }
 
-    static StringBuilder offScreenBuffer = new StringBuilder(); // Off-screen buffer to hold the next frame
+    static readonly StringBuilder offScreenBuffer = new StringBuilder(); // Off-screen buffer to hold the next frame
 
     static void Render()
     {
