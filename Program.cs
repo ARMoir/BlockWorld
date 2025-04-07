@@ -10,6 +10,8 @@ class Program
     static char[,]? world;
     static int charX, charY;
     static int worldOffset = 0;
+    static int skyHeight = height - 15;  // Sky height
+    static int groundStart = skyHeight + 3;  // Ground level start
     static readonly char[,,] worldSections = new char[5, height, width];
     static bool needsRedraw = true;
     static Dictionary<char, int> inventory = new Dictionary<char, int>();
@@ -31,8 +33,6 @@ class Program
     static void GenerateWorldSection(char[,,] sections, int sectionIndex)
     {
         Random rand = new Random();
-        int skyHeight = height - 15;  // Sky height
-        int groundStart = skyHeight + 3;  // Ground level start
 
         // 1. Sky and ground (initialize sky and ground)
         for (int y = 0; y < height; y++)
@@ -42,10 +42,29 @@ class Program
                 if (y < skyHeight)
                 {
                     // Only place clouds in the upper portion of the sky
-                    if (y < skyHeight - 5 && rand.Next(100) < 2)
-                        sections[sectionIndex, y, x] = '~';  // Cloud
+                    if (y < skyHeight - 5 && rand.Next(100) < 10)
+                    {
+                        // Create cloud clusters
+                        int cloudSize = rand.Next(1, 2);
+                        for (int cy = y; cy < y + cloudSize && cy < skyHeight - 5; cy++)
+                        {
+                            for (int cx = x; cx < x + cloudSize && cx < width; cx++)
+                            {
+                                if (rand.Next(100) < 50) // 50% chance for each cell to be a cloud
+                                {
+                                    sections[sectionIndex, cy, cx] = '~';  // Cloud
+                                }
+                                else
+                                {
+                                    sections[sectionIndex, cy, cx] = ' ';  // Empty sky if not a cloud
+                                }
+                            }
+                        }
+                    }
                     else
+                    {
                         sections[sectionIndex, y, x] = ' ';  // Empty sky
+                    }
                 }
                 else
                 {
@@ -53,6 +72,7 @@ class Program
                 }
             }
         }
+
 
         // 2. Mountains (add mountains)
         for (int i = 0; i < 10; i++)  // Add a few mountains
@@ -85,8 +105,17 @@ class Program
                         sections[sectionIndex, y - 1, x] == ' ' &&
                         sections[sectionIndex, y - 2, x] == ' ')
                     {
-                        sections[sectionIndex, y - 2, x] = '^'; // Foliage
-                        sections[sectionIndex, y - 1, x] = '|'; // Trunk
+                        int treeHeight = rand.Next(2, 5); // Random tree height
+                        for (int ty = y - treeHeight; ty < y; ty++)
+                        {
+                            if (IsInside(x, ty))
+                                sections[sectionIndex, ty, x] = '|'; // Trunk
+                        }
+                        for (int fx = x - 1; fx <= x + 1; fx++) // Foliage width
+                        {
+                            if (IsInside(fx, y - treeHeight - 1))
+                                sections[sectionIndex, y - treeHeight - 1, fx] = '^'; // Foliage
+                        }
                         break; // Only one tree per column
                     }
                 }
@@ -97,17 +126,24 @@ class Program
             {
                 if (rand.Next(100) < 10) // 10% chance
                 {
-                    // Check if trunk and foliage space is free
-                    if (IsInside(x, groundStart - 1) && sections[sectionIndex, groundStart - 1, x] == ' ' &&
-                        IsInside(x, groundStart - 2) && sections[sectionIndex, groundStart - 2, x] == ' ')
+                    int treeHeight = rand.Next(2, 5); // Random tree height
+                                                      // Check if trunk and foliage space is free
+                    if (IsInside(x, groundStart - treeHeight - 1) && sections[sectionIndex, groundStart - treeHeight - 1, x] == ' ')
                     {
-                        sections[sectionIndex, groundStart - 2, x] = '^'; // Foliage
-                        sections[sectionIndex, groundStart - 1, x] = '|'; // Trunk
+                        for (int ty = groundStart - treeHeight; ty < groundStart; ty++)
+                        {
+                            if (IsInside(x, ty))
+                                sections[sectionIndex, ty, x] = '|'; // Trunk
+                        }
+                        for (int fx = x - 1; fx <= x + 1; fx++) // Foliage width
+                        {
+                            if (IsInside(fx, groundStart - treeHeight - 1))
+                                sections[sectionIndex, groundStart - treeHeight - 1, fx] = '^'; // Foliage
+                        }
                     }
                 }
             }
         }
-
 
         // 4. Carve caves
         for (int i = 0; i < 20; i++) // Reduced number of caves
@@ -144,6 +180,7 @@ class Program
             }
         }
     }
+
 
     static char[,] GetWorldSection(char[,,] sections, int sectionIndex)
     {
@@ -355,6 +392,17 @@ static void UpdateGameState()
                     ConsoleColor foreground = ConsoleColor.Gray; // Default color
                     ConsoleColor background = ConsoleColor.Black;
 
+                    if (y < skyHeight)
+                    {
+                        // Sky color
+                        background = ConsoleColor.Blue; // Change sky background to blue
+                    }
+                    else
+                    {
+                        // Ground color
+                        background = ConsoleColor.DarkGreen; // Change ground background to dark green
+                    }
+
                     if (x == charX && y == charY)
                     {
                         foreground = ConsoleColor.Yellow; // Player color
@@ -411,6 +459,18 @@ static void UpdateGameState()
 
                 // Set the cursor position and color
                 Console.SetCursorPosition(x, y);
+
+                if (y < skyHeight)
+                {
+                    // Sky color
+                    background = ConsoleColor.Blue; // Change sky background to blue
+                }
+                else
+                {
+                    // Ground color
+                    background = ConsoleColor.DarkGreen; // Change ground background to dark green
+                }
+
                 Console.ForegroundColor = foreground;
                 Console.BackgroundColor = background;
 
