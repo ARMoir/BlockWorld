@@ -15,6 +15,8 @@ class Program
     static readonly char[,,] worldSections = new char[5, height, width];
     static bool needsRedraw = true;
     static Dictionary<char, int> inventory = new Dictionary<char, int>();
+    static int selectedSlot = 0;  // Inventory selection index (0-8 corresponds to 1-9 keys)
+
 
 
     static void Main()
@@ -232,6 +234,19 @@ class Program
 
     static Direction lastDirection = Direction.None;  // To track the last direction of movement
 
+    static char? GetSelectedInventoryItem()
+    {
+        int index = 0;
+        foreach (var kvp in inventory)
+        {
+            if (index == selectedSlot)
+                return kvp.Key;
+            index++;
+        }
+        return null;
+    }
+
+
     static void HandleInput()
     {
         while (true)
@@ -244,6 +259,45 @@ class Program
 
                 switch (key)
                 {
+                    case ConsoleKey.D1: selectedSlot = 0; needsRedraw = true; break;
+                    case ConsoleKey.D2: selectedSlot = 1; needsRedraw = true; break;
+                    case ConsoleKey.D3: selectedSlot = 2; needsRedraw = true; break;
+                    case ConsoleKey.D4: selectedSlot = 3; needsRedraw = true; break;
+                    case ConsoleKey.D5: selectedSlot = 4; needsRedraw = true; break;
+                    case ConsoleKey.D6: selectedSlot = 5; needsRedraw = true; break;
+                    case ConsoleKey.D7: selectedSlot = 6; needsRedraw = true; break;
+                    case ConsoleKey.D8: selectedSlot = 7; needsRedraw = true; break;
+                    case ConsoleKey.D9: selectedSlot = 8; needsRedraw = true; break;
+
+                    case ConsoleKey.B:
+                        // Place block in the direction of last movement
+                        char? selectedItem = GetSelectedInventoryItem();
+                        if (selectedItem != null)
+                        {
+                            int targetX = charX;
+                            int targetY = charY;
+
+                            switch (lastDirection)
+                            {
+                                case Direction.Up: targetY--; break;
+                                case Direction.Down: targetY++; break;
+                                case Direction.Left: targetX--; break;
+                                case Direction.Right: targetX++; break;
+                            }
+
+                            if (IsInside(targetX, targetY) && world[targetY, targetX] == ' ')
+                            {
+                                world[targetY, targetX] = selectedItem.Value;
+                                inventory[selectedItem.Value]--;
+                                if (inventory[selectedItem.Value] <= 0)
+                                    inventory.Remove(selectedItem.Value);
+
+                                UpdateScreenBuffer(targetX, targetY, selectedItem.Value, ConsoleColor.Gray, ConsoleColor.Black);
+                                needsRedraw = true;
+                            }
+                        }
+                        break;
+
                     case ConsoleKey.W:
                         // Try to move up
                         if (IsInside(charX, charY - 1) && world[charY - 1, charX] == ' ')
@@ -451,6 +505,9 @@ static void UpdateGameState()
         }
         else
         {
+            try
+            {
+           
             // Dirty rendering for subsequent frames
             foreach (var cell in screenBuffer)
             {
@@ -478,6 +535,12 @@ static void UpdateGameState()
                 Console.Write(tile);
             }
 
+            }
+            catch (Exception ex)
+            {
+                //Console.WriteLine($"Error clearing console: {ex.Message}");
+            }
+
             // Clear the buffer after rendering
             screenBuffer.Clear();
         }
@@ -487,10 +550,21 @@ static void UpdateGameState()
         Console.ForegroundColor = ConsoleColor.White;
         Console.BackgroundColor = ConsoleColor.Black;
         Console.Write("Inventory: ");
+
+        int slotIndex = 0;
         foreach (var item in inventory)
         {
-            Console.Write($"{item.Key}:{item.Value} ");  // Display item and count
+            bool selected = slotIndex == selectedSlot;
+
+            Console.ForegroundColor = selected ? ConsoleColor.Black : ConsoleColor.White;
+            Console.BackgroundColor = selected ? ConsoleColor.White : ConsoleColor.Black;
+
+            Console.Write($"[{slotIndex + 1}:{item.Key}:{item.Value}] ");
+            slotIndex++;
         }
+
+        Console.ResetColor();
+
     }
 
 
@@ -501,7 +575,6 @@ static void UpdateGameState()
             screenBuffer[(x, y)] = (tile, foreground, background);
         }
     }
-
 
     static bool IsInside(int x, int y) => x >= 0 && x < width && y >= 0 && y < height;
 
